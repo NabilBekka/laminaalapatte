@@ -19,6 +19,7 @@ app.use("/api/creations", require("./routes/creations"));
 app.use("/api/services", require("./routes/services"));
 app.use("/api/contact", require("./routes/contact"));
 app.use("/api/social-links", require("./routes/socialLinks"));
+app.use("/api/upload", require("./routes/upload"));
 
 // Health check
 app.get("/api/health", (req, res) => {

@@ -21,6 +21,7 @@ async function seed() {
 
     // ── Site Settings ──
     const settings = [
+      ["site_name", "La Mina à La Pate"],
       ["logo_url", "/logo.jpg"],
       [
         "about_text",
