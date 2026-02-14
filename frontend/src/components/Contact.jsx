@@ -27,6 +27,7 @@ export default function Contact({ settings = {}, socialLinks = [] }) {
   const sectionRef = useRef(null);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -34,7 +35,6 @@ export default function Contact({ settings = {}, socialLinks = [] }) {
     phone: "",
     event_type: "",
     event_date: "",
-    guests: "",
     message: "",
   });
 
@@ -62,17 +62,23 @@ export default function Contact({ settings = {}, socialLinks = [] }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+
     if (!form.first_name || !form.email) {
-      alert("Veuillez remplir au moins votre prénom et email.");
+      setError("Veuillez remplir au moins votre prénom et email.");
       return;
     }
 
     setLoading(true);
     try {
-      await submitContact(form);
-      setSubmitted(true);
+      const result = await submitContact(form);
+      if (result.success) {
+        setSubmitted(true);
+      } else {
+        setError(result.error || "Nous avons un problème, veuillez réessayer ultérieurement.");
+      }
     } catch (err) {
-      alert("Erreur lors de l'envoi. Veuillez réessayer.");
+      setError("Nous avons un problème, veuillez réessayer ultérieurement.");
     } finally {
       setLoading(false);
     }
@@ -213,29 +219,15 @@ export default function Contact({ settings = {}, socialLinks = [] }) {
                 </select>
               </div>
 
-              <div className="form__row">
-                <div className="form__group">
-                  <label htmlFor="event_date">Date souhaitée</label>
-                  <input
-                    type="date"
-                    id="event_date"
-                    name="event_date"
-                    value={form.event_date}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="form__group">
-                  <label htmlFor="guests">Nombre de personnes</label>
-                  <input
-                    type="number"
-                    id="guests"
-                    name="guests"
-                    placeholder="Ex: 50"
-                    min="1"
-                    value={form.guests}
-                    onChange={handleChange}
-                  />
-                </div>
+              <div className="form__group">
+                <label htmlFor="event_date">Date souhaitée</label>
+                <input
+                  type="date"
+                  id="event_date"
+                  name="event_date"
+                  value={form.event_date}
+                  onChange={handleChange}
+                />
               </div>
 
               <div className="form__group">
@@ -249,6 +241,12 @@ export default function Contact({ settings = {}, socialLinks = [] }) {
                 />
               </div>
 
+              {error && (
+                <div className="form__error">
+                  {error}
+                </div>
+              )}
+
               <button
                 type="submit"
                 className="form__submit"
@@ -261,10 +259,10 @@ export default function Contact({ settings = {}, socialLinks = [] }) {
           ) : (
             <div className="form__success">
               <div className="form__success-icon">🎀</div>
-              <h3 className="form__success-title">Merci pour votre demande !</h3>
+              <h3 className="form__success-title">Demande envoyée !</h3>
               <p className="form__success-text">
-                Nous avons bien reçu votre projet et nous vous répondrons avec un
-                devis personnalisé dans les 48 heures.
+                Votre demande de devis a bien été envoyée. Nous vous répondrons
+                dans les plus brefs délais.
               </p>
             </div>
           )}

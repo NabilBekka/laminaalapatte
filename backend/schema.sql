@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS contact_requests (
   phone VARCHAR(50),
   event_type VARCHAR(100),
   event_date DATE,
-  guests INT,
   message TEXT,
   is_read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW()

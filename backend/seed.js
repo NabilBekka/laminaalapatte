@@ -27,7 +27,7 @@ async function seed() {
         "Derrière chaque création se cache une passion débordante pour l'art sucré. La Mina à La Pate est née de l'envie de transformer des ingrédients simples en véritables œuvres d'art gourmandes. Chaque gâteau est conçu sur mesure, avec des produits frais et de qualité, pour sublimer vos moments les plus précieux — mariages, anniversaires, baptêmes ou simplement le plaisir de se faire plaisir.",
       ],
       ["location", "Île-de-France"],
-      ["email", "contact@laminaalapate.fr"],
+      ["email", "laminaalapate@outlook.com"],
       ["phone", "06 XX XX XX XX"],
     ];
 

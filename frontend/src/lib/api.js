@@ -43,5 +43,9 @@ export async function submitContact(data) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  return res.json();
+  const json = await res.json();
+  if (!res.ok) {
+    return { success: false, error: json.error || "Erreur serveur" };
+  }
+  return json;
 }
