@@ -91,30 +91,6 @@ export async function deleteCreation(id) {
   return res.json();
 }
 
-// ── Creation Images ──
-export async function addCreationImage(creationId, image_url, sort_order) {
-  const res = await fetch(`${API}/creations/${creationId}/images`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image_url, sort_order }),
-  });
-  return res.json();
-}
-
-export async function updateCreationImage(imageId, sort_order) {
-  const res = await fetch(`${API}/creations/images/${imageId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sort_order }),
-  });
-  return res.json();
-}
-
-export async function deleteCreationImage(imageId) {
-  const res = await fetch(`${API}/creations/images/${imageId}`, { method: "DELETE" });
-  return res.json();
-}
-
 // ── Upload ──
 export async function uploadImage(file) {
   const form = new FormData();

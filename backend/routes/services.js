@@ -1,12 +1,23 @@
 const router = require("express").Router();
 const pool = require("../db");
 
-// Re-sequence all sort_orders to be 1, 2, 3...
-async function resequenceServices(client) {
-  const conn = client || pool;
-  const { rows } = await conn.query("SELECT id FROM services ORDER BY sort_order ASC, id ASC");
-  for (let i = 0; i < rows.length; i++) {
-    await conn.query("UPDATE services SET sort_order = $1 WHERE id = $2", [i + 1, rows[i].id]);
+// Place targetId at targetRank, resequence everything else around it
+async function resequenceServices(targetId, targetRank) {
+  const { rows } = await pool.query("SELECT id FROM services ORDER BY sort_order ASC, id ASC");
+
+  if (targetId && targetRank) {
+    // Remove target from list, insert at desired position
+    const others = rows.filter((r) => r.id !== targetId);
+    const pos = Math.max(0, Math.min(targetRank - 1, others.length));
+    others.splice(pos, 0, { id: targetId });
+    for (let i = 0; i < others.length; i++) {
+      await pool.query("UPDATE services SET sort_order = $1 WHERE id = $2", [i + 1, others[i].id]);
+    }
+  } else {
+    // Simple resequence (after delete)
+    for (let i = 0; i < rows.length; i++) {
+      await pool.query("UPDATE services SET sort_order = $1 WHERE id = $2", [i + 1, rows[i].id]);
+    }
   }
 }
 
@@ -30,9 +41,9 @@ router.post("/", async (req, res) => {
     }
     const { rows } = await pool.query(
       "INSERT INTO services (title, description, sort_order) VALUES ($1, $2, $3) RETURNING *",
-      [title, description, sort_order || 0]
+      [title, description, sort_order || 9999]
     );
-    await resequenceServices();
+    await resequenceServices(rows[0].id, sort_order || rows[0].id);
     const { rows: updated } = await pool.query("SELECT * FROM services WHERE id = $1", [rows[0].id]);
     res.status(201).json(updated[0]);
   } catch (err) {
@@ -46,12 +57,16 @@ router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, sort_order } = req.body;
+    // Update fields (except sort_order which is handled by resequence)
     const { rows } = await pool.query(
-      "UPDATE services SET title = COALESCE($1, title), description = COALESCE($2, description), sort_order = COALESCE($3, sort_order) WHERE id = $4 RETURNING *",
-      [title, description, sort_order, id]
+      "UPDATE services SET title = COALESCE($1, title), description = COALESCE($2, description) WHERE id = $3 RETURNING *",
+      [title, description, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Service introuvable" });
-    await resequenceServices();
+    // If sort_order was provided, resequence to place it correctly
+    if (sort_order !== undefined && sort_order !== null) {
+      await resequenceServices(parseInt(id), parseInt(sort_order));
+    }
     const { rows: updated } = await pool.query("SELECT * FROM services WHERE id = $1", [id]);
     res.json(updated[0]);
   } catch (err) {

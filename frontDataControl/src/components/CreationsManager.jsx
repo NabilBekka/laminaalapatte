@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   fetchCreations, createCreation, updateCreation, deleteCreation,
-  addCreationImage, deleteCreationImage,
   uploadImage, uploadImages, BASE,
 } from "@/lib/api";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -26,18 +25,9 @@ export default function CreationsManager() {
   useEffect(() => { loadCreations(); }, []);
 
   async function loadCreations() {
-    try {
-      const data = await fetchCreations();
-      setCreations(data);
-    } catch { setMsg({ type: "error", text: "Erreur de chargement" }); }
+    try { setCreations(await fetchCreations()); }
+    catch { setMsg({ type: "error", text: "Erreur de chargement" }); }
     setLoading(false);
-  }
-
-  async function handleRankChange(id, newRank) {
-    try {
-      await updateCreation(id, { sort_order: parseInt(newRank, 10) });
-      await loadCreations();
-    } catch { setMsg({ type: "error", text: "Erreur mise à jour rang" }); }
   }
 
   async function confirmDelete() {
@@ -68,16 +58,8 @@ export default function CreationsManager() {
         {creations.map((c) => (
           <div key={c.id}>
             <div className="todo-item">
+              <span className="todo-item__rank-badge">{c.sort_order}</span>
               <span className="todo-item__title">{c.title}</span>
-              <input
-                type="number"
-                className="todo-item__rank"
-                min={1}
-                max={creations.length}
-                value={c.sort_order}
-                onChange={(e) => handleRankChange(c.id, e.target.value)}
-                title="Rang"
-              />
               <button
                 className="btn btn--secondary btn--sm"
                 onClick={() => setEditId(editId === c.id ? null : c.id)}
@@ -92,6 +74,7 @@ export default function CreationsManager() {
             {editId === c.id && (
               <EditCreationForm
                 creation={c}
+                totalCount={creations.length}
                 onSaved={() => { setEditId(null); loadCreations(); }}
                 onCancel={() => setEditId(null)}
               />
@@ -107,6 +90,7 @@ export default function CreationsManager() {
       ) : (
         <AddCreationForm
           nextOrder={creations.length + 1}
+          totalCount={creations.length}
           onSaved={() => { setShowAdd(false); loadCreations(); }}
           onCancel={() => setShowAdd(false)}
         />
@@ -117,33 +101,37 @@ export default function CreationsManager() {
 
 /* ════════════════════════════════════════════
    EDIT CREATION FORM
+   All changes (text, rank, images) are LOCAL
+   until the user clicks "Enregistrer"
    ════════════════════════════════════════════ */
-function EditCreationForm({ creation, onSaved, onCancel }) {
+function EditCreationForm({ creation, totalCount, onSaved, onCancel }) {
   const [title, setTitle] = useState(creation.title);
   const [description, setDescription] = useState(creation.description);
   const [eventType, setEventType] = useState(creation.event_type);
+  const [sortOrder, setSortOrder] = useState(creation.sort_order);
   const [mainImage, setMainImage] = useState(creation.main_image);
-  const [images, setImages] = useState(creation.additional_images || []);
+
+  // Images: track existing, pending deletes, pending adds
+  const [existingImages, setExistingImages] = useState(creation.additional_images || []);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState([]);
+  const [pendingAddUrls, setPendingAddUrls] = useState([]);
+
   const [saving, setSaving] = useState(false);
   const [inlineMsg, setInlineMsg] = useState(null);
-  const [deleteImgTarget, setDeleteImgTarget] = useState(null);
+  const [deleteImgTarget, setDeleteImgTarget] = useState(null); // { type: 'existing', id } or { type: 'pending', index }
   const mainInputRef = useRef(null);
   const addImgRef = useRef(null);
+
+  // Visible images = existing minus pending deletes + pending adds
+  const visibleExisting = existingImages.filter((img) => !pendingDeleteIds.includes(img.id));
 
   async function handleReplaceMain(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const { url } = await uploadImage(file);
-    setMainImage(url);
-  }
-
-  async function confirmDeleteImage() {
-    if (!deleteImgTarget) return;
     try {
-      await deleteCreationImage(deleteImgTarget.id);
-      setImages((prev) => prev.filter((img) => img.id !== deleteImgTarget.id));
-    } catch { alert("Erreur suppression image"); }
-    setDeleteImgTarget(null);
+      const { url } = await uploadImage(file);
+      setMainImage(url);
+    } catch { alert("Erreur upload"); }
   }
 
   async function handleAddImages(e) {
@@ -151,12 +139,23 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
     if (files.length === 0) return;
     try {
       const { urls } = await uploadImages(files);
-      for (let i = 0; i < urls.length; i++) {
-        const result = await addCreationImage(creation.id, urls[i], images.length + i + 1);
-        setImages((prev) => [...prev, result]);
-      }
-    } catch { alert("Erreur upload images"); }
+      setPendingAddUrls((prev) => [...prev, ...urls]);
+    } catch { alert("Erreur upload"); }
     e.target.value = "";
+  }
+
+  function requestDeleteImage(target) {
+    setDeleteImgTarget(target);
+  }
+
+  function confirmDeleteImage() {
+    if (!deleteImgTarget) return;
+    if (deleteImgTarget.type === "existing") {
+      setPendingDeleteIds((prev) => [...prev, deleteImgTarget.id]);
+    } else {
+      setPendingAddUrls((prev) => prev.filter((_, i) => i !== deleteImgTarget.index));
+    }
+    setDeleteImgTarget(null);
   }
 
   async function handleSubmit(e) {
@@ -166,7 +165,13 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
     setInlineMsg(null);
     try {
       await updateCreation(creation.id, {
-        title, description, event_type: eventType, main_image: mainImage,
+        title,
+        description,
+        event_type: eventType,
+        main_image: mainImage,
+        sort_order: sortOrder,
+        images_to_delete: pendingDeleteIds,
+        images_to_add: pendingAddUrls,
       });
       setInlineMsg({ type: "success", text: "Enregistré !" });
       setTimeout(() => onSaved(), 800);
@@ -175,6 +180,8 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
     }
     setSaving(false);
   }
+
+  const hasChanges = pendingDeleteIds.length > 0 || pendingAddUrls.length > 0;
 
   return (
     <form className="inline-form" onSubmit={handleSubmit}>
@@ -196,9 +203,15 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
         <label>Description</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
       </div>
-      <div className="form-group">
-        <label>Événement</label>
-        <input type="text" value={eventType} onChange={(e) => setEventType(e.target.value)} required />
+      <div className="form-row">
+        <div className="form-group">
+          <label>Événement</label>
+          <input type="text" value={eventType} onChange={(e) => setEventType(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label>Rang (1 à {totalCount})</label>
+          <input type="number" min={1} max={totalCount} value={sortOrder} onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 1)} />
+        </div>
       </div>
 
       {/* Main image */}
@@ -213,18 +226,36 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
         </div>
       </div>
 
-      {/* Additional images — no rank input */}
+      {/* Existing images (minus pending deletes) */}
       <div className="form-group">
-        <label>Autres images ({images.length})</label>
-        {images.map((img) => (
+        <label>
+          Autres images ({visibleExisting.length + pendingAddUrls.length})
+          {hasChanges && <span style={{ color: "var(--mauve)", fontSize: "0.7rem", marginLeft: "0.5rem" }}>— modifications en attente</span>}
+        </label>
+
+        {visibleExisting.map((img) => (
           <div key={img.id} className="img-row">
             <img src={imgSrc(img.image_url)} alt="" className="img-preview" />
             <span className="img-label">{img.image_url.split("/").pop()}</span>
-            <button type="button" className="btn btn--danger btn--sm" onClick={() => setDeleteImgTarget(img)}>
+            <button type="button" className="btn btn--danger btn--sm"
+              onClick={() => requestDeleteImage({ type: "existing", id: img.id })}>
               Supprimer
             </button>
           </div>
         ))}
+
+        {/* Pending adds (not yet saved) */}
+        {pendingAddUrls.map((url, i) => (
+          <div key={`new-${i}`} className="img-row" style={{ borderLeft: "3px solid var(--green)" }}>
+            <img src={imgSrc(url)} alt="" className="img-preview" />
+            <span className="img-label" style={{ color: "var(--green)" }}>Nouvelle image</span>
+            <button type="button" className="btn btn--danger btn--sm"
+              onClick={() => requestDeleteImage({ type: "pending", index: i })}>
+              Supprimer
+            </button>
+          </div>
+        ))}
+
         <input type="file" accept="image/*" multiple ref={addImgRef} onChange={handleAddImages} style={{ display: "none" }} />
         <button type="button" className="btn btn--secondary btn--sm" style={{ marginTop: "0.5rem" }} onClick={() => addImgRef.current?.click()}>
           + Ajouter des images
@@ -245,7 +276,7 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
 /* ════════════════════════════════════════════
    ADD CREATION FORM
    ════════════════════════════════════════════ */
-function AddCreationForm({ nextOrder, onSaved, onCancel }) {
+function AddCreationForm({ nextOrder, totalCount, onSaved, onCancel }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [eventType, setEventType] = useState("");
@@ -336,8 +367,8 @@ function AddCreationForm({ nextOrder, onSaved, onCancel }) {
           <input type="text" value={eventType} onChange={(e) => setEventType(e.target.value)} required placeholder="Ex: Mariage, Anniversaire..." />
         </div>
         <div className="form-group">
-          <label>Ordre d&apos;affichage</label>
-          <input type="number" min={1} value={sortOrder} onChange={(e) => setSortOrder(parseInt(e.target.value, 10))} />
+          <label>Rang (1 à {totalCount + 1})</label>
+          <input type="number" min={1} max={totalCount + 1} value={sortOrder} onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 1)} />
         </div>
       </div>
 

@@ -15,25 +15,15 @@ export default function ServicesManager() {
   useEffect(() => { loadServices(); }, []);
 
   async function loadServices() {
-    try {
-      const data = await fetchServices();
-      setServices(data);
-    } catch { setMsg({ type: "error", text: "Erreur de chargement" }); }
+    try { setServices(await fetchServices()); }
+    catch { setMsg({ type: "error", text: "Erreur de chargement" }); }
     setLoading(false);
-  }
-
-  async function handleRankChange(id, newRank) {
-    try {
-      await updateService(id, { sort_order: parseInt(newRank, 10) });
-      await loadServices();
-    } catch { setMsg({ type: "error", text: "Erreur mise à jour rang" }); }
   }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
     try {
       await deleteService(deleteTarget.id);
-      setServices((prev) => prev.filter((s) => s.id !== deleteTarget.id));
       await loadServices();
       setMsg({ type: "success", text: "Service supprimé" });
     } catch { setMsg({ type: "error", text: "Erreur suppression" }); }
@@ -58,16 +48,8 @@ export default function ServicesManager() {
         {services.map((s) => (
           <div key={s.id}>
             <div className="todo-item">
+              <span className="todo-item__rank-badge">{s.sort_order}</span>
               <span className="todo-item__title">{s.title}</span>
-              <input
-                type="number"
-                className="todo-item__rank"
-                min={1}
-                max={services.length}
-                value={s.sort_order}
-                onChange={(e) => handleRankChange(s.id, e.target.value)}
-                title="Rang"
-              />
               <button
                 className="btn btn--secondary btn--sm"
                 onClick={() => setEditId(editId === s.id ? null : s.id)}
@@ -82,6 +64,7 @@ export default function ServicesManager() {
             {editId === s.id && (
               <EditServiceForm
                 service={s}
+                totalCount={services.length}
                 onSaved={() => { setEditId(null); loadServices(); }}
                 onCancel={() => setEditId(null)}
               />
@@ -97,6 +80,7 @@ export default function ServicesManager() {
       ) : (
         <AddServiceForm
           nextOrder={services.length + 1}
+          totalCount={services.length}
           onSaved={() => { setShowAdd(false); loadServices(); }}
           onCancel={() => setShowAdd(false)}
         />
@@ -105,9 +89,10 @@ export default function ServicesManager() {
   );
 }
 
-function EditServiceForm({ service, onSaved, onCancel }) {
+function EditServiceForm({ service, totalCount, onSaved, onCancel }) {
   const [title, setTitle] = useState(service.title);
   const [description, setDescription] = useState(service.description);
+  const [sortOrder, setSortOrder] = useState(service.sort_order);
   const [saving, setSaving] = useState(false);
   const [inlineMsg, setInlineMsg] = useState(null);
 
@@ -117,7 +102,7 @@ function EditServiceForm({ service, onSaved, onCancel }) {
     setSaving(true);
     setInlineMsg(null);
     try {
-      await updateService(service.id, { title, description });
+      await updateService(service.id, { title, description, sort_order: sortOrder });
       setInlineMsg({ type: "success", text: "Enregistré !" });
       setTimeout(() => onSaved(), 800);
     } catch {
@@ -137,6 +122,10 @@ function EditServiceForm({ service, onSaved, onCancel }) {
         <label>Description</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
       </div>
+      <div className="form-group">
+        <label>Rang (1 à {totalCount})</label>
+        <input type="number" min={1} max={totalCount} value={sortOrder} onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 1)} />
+      </div>
       <div className="btn-group">
         <button type="submit" className="btn btn--primary btn--sm" disabled={saving}>
           {saving ? "..." : "Enregistrer"}
@@ -148,7 +137,7 @@ function EditServiceForm({ service, onSaved, onCancel }) {
   );
 }
 
-function AddServiceForm({ nextOrder, onSaved, onCancel }) {
+function AddServiceForm({ nextOrder, totalCount, onSaved, onCancel }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sortOrder, setSortOrder] = useState(nextOrder);
@@ -182,8 +171,8 @@ function AddServiceForm({ nextOrder, onSaved, onCancel }) {
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
       </div>
       <div className="form-group">
-        <label>Ordre d&apos;affichage</label>
-        <input type="number" min={1} value={sortOrder} onChange={(e) => setSortOrder(parseInt(e.target.value, 10))} />
+        <label>Rang (1 à {totalCount + 1})</label>
+        <input type="number" min={1} max={totalCount + 1} value={sortOrder} onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 1)} />
       </div>
       <div className="btn-group">
         <button type="submit" className="btn btn--primary btn--sm" disabled={saving}>
