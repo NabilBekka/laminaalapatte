@@ -714,6 +714,12 @@ body {
   width: 100%;
   height: auto;
   display: block;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.creation-detail__main-image img:hover {
+  opacity: 0.9;
 }
 
 .creation-detail__main-image-placeholder {
@@ -755,10 +761,12 @@ body {
   height: 100%;
   object-fit: cover;
   transition: transform 0.6s ease;
+  cursor: pointer;
 }
 
 .creation-detail__gallery-item:hover img {
   transform: scale(1.05);
+  opacity: 0.9;
 }
 
 .creation-detail__gallery-placeholder {

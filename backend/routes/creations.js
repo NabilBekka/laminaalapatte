@@ -1,6 +1,14 @@
 const router = require("express").Router();
 const pool = require("../db");
 
+// Re-sequence all sort_orders to be 1, 2, 3...
+async function resequenceCreations() {
+  const { rows } = await pool.query("SELECT id FROM creations ORDER BY sort_order ASC, id ASC");
+  for (let i = 0; i < rows.length; i++) {
+    await pool.query("UPDATE creations SET sort_order = $1 WHERE id = $2", [i + 1, rows[i].id]);
+  }
+}
+
 // GET /api/creations
 router.get("/", async (req, res) => {
   try {
@@ -40,9 +48,9 @@ router.get("/event-types", async (req, res) => {
   }
 });
 
-// ── Image management (must be BEFORE /:id) ──
+// ── Image management (BEFORE /:id) ──
 
-// PUT /api/creations/images/:imageId — update sort_order
+// PUT /api/creations/images/:imageId
 router.put("/images/:imageId", async (req, res) => {
   try {
     const { imageId } = req.params;
@@ -101,7 +109,6 @@ router.post("/", async (req, res) => {
       [title, description, event_type, main_image, sort_order || 0]
     );
     const creation = rows[0];
-    // Insert additional images if provided
     if (additional_images && additional_images.length > 0) {
       for (const img of additional_images) {
         await pool.query(
@@ -110,11 +117,12 @@ router.post("/", async (req, res) => {
         );
       }
     }
-    // Re-fetch with images
+    await resequenceCreations();
     const { rows: imgs } = await pool.query(
       "SELECT * FROM creation_images WHERE creation_id = $1 ORDER BY sort_order", [creation.id]
     );
-    res.status(201).json({ ...creation, additional_images: imgs });
+    const { rows: updated } = await pool.query("SELECT * FROM creations WHERE id = $1", [creation.id]);
+    res.status(201).json({ ...updated[0], additional_images: imgs });
   } catch (err) {
     console.error("POST /api/creations error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -137,7 +145,9 @@ router.put("/:id", async (req, res) => {
       [title, description, event_type, main_image, sort_order, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Création introuvable" });
-    res.json(rows[0]);
+    await resequenceCreations();
+    const { rows: updated } = await pool.query("SELECT * FROM creations WHERE id = $1", [id]);
+    res.json(updated[0]);
   } catch (err) {
     console.error("PUT /api/creations error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -150,6 +160,7 @@ router.delete("/:id", async (req, res) => {
     const { id } = req.params;
     const { rowCount } = await pool.query("DELETE FROM creations WHERE id = $1", [id]);
     if (rowCount === 0) return res.status(404).json({ error: "Création introuvable" });
+    await resequenceCreations();
     res.json({ success: true });
   } catch (err) {
     console.error("DELETE /api/creations error:", err);
@@ -157,7 +168,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// POST /api/creations/:id/images — add images to existing creation
+// POST /api/creations/:id/images
 router.post("/:id/images", async (req, res) => {
   try {
     const { id } = req.params;

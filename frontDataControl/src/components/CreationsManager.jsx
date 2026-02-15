@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import {
   fetchCreations, createCreation, updateCreation, deleteCreation,
-  addCreationImage, updateCreationImage, deleteCreationImage,
+  addCreationImage, deleteCreationImage,
   uploadImage, uploadImages, BASE,
 } from "@/lib/api";
+import ConfirmModal from "@/components/ConfirmModal";
 
 function imgSrc(url) {
   if (!url) return "";
@@ -20,6 +21,7 @@ export default function CreationsManager() {
   const [showAdd, setShowAdd] = useState(false);
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => { loadCreations(); }, []);
 
@@ -38,13 +40,14 @@ export default function CreationsManager() {
     } catch { setMsg({ type: "error", text: "Erreur mise à jour rang" }); }
   }
 
-  async function handleDeleteCreation(id, title) {
-    if (!confirm(`Supprimer la création "${title}" ?`)) return;
+  async function confirmDelete() {
+    if (!deleteTarget) return;
     try {
-      await deleteCreation(id);
-      setCreations((prev) => prev.filter((c) => c.id !== id));
+      await deleteCreation(deleteTarget.id);
+      await loadCreations();
       setMsg({ type: "success", text: "Création supprimée" });
     } catch { setMsg({ type: "error", text: "Erreur suppression" }); }
+    setDeleteTarget(null);
   }
 
   if (loading) return <p>Chargement...</p>;
@@ -52,6 +55,14 @@ export default function CreationsManager() {
   return (
     <div>
       {msg && <div className={`msg msg--${msg.type}`}>{msg.text}</div>}
+
+      {deleteTarget && (
+        <ConfirmModal
+          message={`Supprimer la création "${deleteTarget.title}" et toutes ses images ?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       <div className="todo-list">
         {creations.map((c) => (
@@ -73,7 +84,7 @@ export default function CreationsManager() {
               >
                 Modifier
               </button>
-              <button className="btn btn--danger btn--sm" onClick={() => handleDeleteCreation(c.id, c.title)}>
+              <button className="btn btn--danger btn--sm" onClick={() => setDeleteTarget(c)}>
                 Supprimer
               </button>
             </div>
@@ -81,7 +92,7 @@ export default function CreationsManager() {
             {editId === c.id && (
               <EditCreationForm
                 creation={c}
-                onSaved={() => { setEditId(null); loadCreations(); setMsg({ type: "success", text: "Création modifiée" }); }}
+                onSaved={() => { setEditId(null); loadCreations(); }}
                 onCancel={() => setEditId(null)}
               />
             )}
@@ -96,7 +107,7 @@ export default function CreationsManager() {
       ) : (
         <AddCreationForm
           nextOrder={creations.length + 1}
-          onSaved={() => { setShowAdd(false); loadCreations(); setMsg({ type: "success", text: "Création ajoutée" }); }}
+          onSaved={() => { setShowAdd(false); loadCreations(); }}
           onCancel={() => setShowAdd(false)}
         />
       )}
@@ -104,9 +115,9 @@ export default function CreationsManager() {
   );
 }
 
-/* ════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════
    EDIT CREATION FORM
-   ════════════════════════════════════════════════════════════ */
+   ════════════════════════════════════════════ */
 function EditCreationForm({ creation, onSaved, onCancel }) {
   const [title, setTitle] = useState(creation.title);
   const [description, setDescription] = useState(creation.description);
@@ -114,6 +125,8 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
   const [mainImage, setMainImage] = useState(creation.main_image);
   const [images, setImages] = useState(creation.additional_images || []);
   const [saving, setSaving] = useState(false);
+  const [inlineMsg, setInlineMsg] = useState(null);
+  const [deleteImgTarget, setDeleteImgTarget] = useState(null);
   const mainInputRef = useRef(null);
   const addImgRef = useRef(null);
 
@@ -124,20 +137,13 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
     setMainImage(url);
   }
 
-  async function handleImageRankChange(imageId, newRank) {
+  async function confirmDeleteImage() {
+    if (!deleteImgTarget) return;
     try {
-      await updateCreationImage(imageId, parseInt(newRank, 10));
-      setImages((prev) =>
-        prev.map((img) => (img.id === imageId ? { ...img, sort_order: parseInt(newRank, 10) } : img))
-      );
-    } catch { alert("Erreur rang image"); }
-  }
-
-  async function handleDeleteImage(imageId) {
-    try {
-      await deleteCreationImage(imageId);
-      setImages((prev) => prev.filter((img) => img.id !== imageId));
+      await deleteCreationImage(deleteImgTarget.id);
+      setImages((prev) => prev.filter((img) => img.id !== deleteImgTarget.id));
     } catch { alert("Erreur suppression image"); }
+    setDeleteImgTarget(null);
   }
 
   async function handleAddImages(e) {
@@ -157,18 +163,30 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
     e.preventDefault();
     if (!title || !description || !eventType) return;
     setSaving(true);
+    setInlineMsg(null);
     try {
       await updateCreation(creation.id, {
         title, description, event_type: eventType, main_image: mainImage,
       });
-      onSaved();
-    } catch { alert("Erreur"); }
+      setInlineMsg({ type: "success", text: "Enregistré !" });
+      setTimeout(() => onSaved(), 800);
+    } catch {
+      setInlineMsg({ type: "error", text: "Erreur" });
+    }
     setSaving(false);
   }
 
   return (
     <form className="inline-form" onSubmit={handleSubmit}>
       <h4>Modifier la création</h4>
+
+      {deleteImgTarget && (
+        <ConfirmModal
+          message="Supprimer cette image ?"
+          onConfirm={confirmDeleteImage}
+          onCancel={() => setDeleteImgTarget(null)}
+        />
+      )}
 
       <div className="form-group">
         <label>Titre</label>
@@ -195,23 +213,14 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
         </div>
       </div>
 
-      {/* Additional images */}
+      {/* Additional images — no rank input */}
       <div className="form-group">
-        <label>Images secondaires ({images.length})</label>
+        <label>Autres images ({images.length})</label>
         {images.map((img) => (
           <div key={img.id} className="img-row">
             <img src={imgSrc(img.image_url)} alt="" className="img-preview" />
             <span className="img-label">{img.image_url.split("/").pop()}</span>
-            <input
-              type="number"
-              className="img-row__rank"
-              min={1}
-              max={images.length}
-              value={img.sort_order}
-              onChange={(e) => handleImageRankChange(img.id, e.target.value)}
-              title="Rang"
-            />
-            <button type="button" className="btn btn--danger btn--sm" onClick={() => handleDeleteImage(img.id)}>
+            <button type="button" className="btn btn--danger btn--sm" onClick={() => setDeleteImgTarget(img)}>
               Supprimer
             </button>
           </div>
@@ -227,14 +236,15 @@ function EditCreationForm({ creation, onSaved, onCancel }) {
           {saving ? "..." : "Enregistrer"}
         </button>
         <button type="button" className="btn btn--secondary btn--sm" onClick={onCancel}>Annuler</button>
+        {inlineMsg && <span className={`inline-msg inline-msg--${inlineMsg.type}`}>{inlineMsg.text}</span>}
       </div>
     </form>
   );
 }
 
-/* ════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════
    ADD CREATION FORM
-   ════════════════════════════════════════════════════════════ */
+   ════════════════════════════════════════════ */
 function AddCreationForm({ nextOrder, onSaved, onCancel }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -244,6 +254,8 @@ function AddCreationForm({ nextOrder, onSaved, onCancel }) {
   const [mainPreview, setMainPreview] = useState(null);
   const [additionalUrls, setAdditionalUrls] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [inlineMsg, setInlineMsg] = useState(null);
+  const [deleteIdx, setDeleteIdx] = useState(null);
   const mainInputRef = useRef(null);
   const otherInputRef = useRef(null);
 
@@ -267,38 +279,48 @@ function AddCreationForm({ nextOrder, onSaved, onCancel }) {
     e.target.value = "";
   }
 
-  function removeAdditional(index) {
-    setAdditionalUrls((prev) => prev.filter((_, i) => i !== index));
+  function confirmRemoveAdditional() {
+    if (deleteIdx === null) return;
+    setAdditionalUrls((prev) => prev.filter((_, i) => i !== deleteIdx));
+    setDeleteIdx(null);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!title || !description || !eventType || !mainImageUrl) {
-      alert("Veuillez remplir tous les champs et ajouter une image principale.");
+      setInlineMsg({ type: "error", text: "Remplissez tous les champs + image principale" });
       return;
     }
     setSaving(true);
+    setInlineMsg(null);
     try {
       const additional_images = additionalUrls.map((url, i) => ({
         image_url: url,
         sort_order: i + 1,
       }));
       await createCreation({
-        title,
-        description,
-        event_type: eventType,
-        main_image: mainImageUrl,
-        sort_order: sortOrder,
-        additional_images,
+        title, description, event_type: eventType,
+        main_image: mainImageUrl, sort_order: sortOrder, additional_images,
       });
-      onSaved();
-    } catch { alert("Erreur création"); }
+      setInlineMsg({ type: "success", text: "Création ajoutée !" });
+      setTimeout(() => onSaved(), 800);
+    } catch {
+      setInlineMsg({ type: "error", text: "Erreur création" });
+    }
     setSaving(false);
   }
 
   return (
     <form className="inline-form" onSubmit={handleSubmit}>
       <h4>Ajouter une création</h4>
+
+      {deleteIdx !== null && (
+        <ConfirmModal
+          message="Supprimer cette image ?"
+          onConfirm={confirmRemoveAdditional}
+          onCancel={() => setDeleteIdx(null)}
+        />
+      )}
 
       <div className="form-group">
         <label>Titre</label>
@@ -336,7 +358,7 @@ function AddCreationForm({ nextOrder, onSaved, onCancel }) {
           <div key={i} className="img-row">
             <img src={imgSrc(url)} alt="" className="img-preview" />
             <span className="img-label">{url.split("/").pop()}</span>
-            <button type="button" className="btn btn--danger btn--sm" onClick={() => removeAdditional(i)}>
+            <button type="button" className="btn btn--danger btn--sm" onClick={() => setDeleteIdx(i)}>
               Supprimer
             </button>
           </div>
@@ -352,6 +374,7 @@ function AddCreationForm({ nextOrder, onSaved, onCancel }) {
           {saving ? "..." : "Créer"}
         </button>
         <button type="button" className="btn btn--secondary btn--sm" onClick={onCancel}>Annuler</button>
+        {inlineMsg && <span className={`inline-msg inline-msg--${inlineMsg.type}`}>{inlineMsg.text}</span>}
       </div>
     </form>
   );

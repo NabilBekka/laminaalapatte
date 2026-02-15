@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchServices, createService, updateService, deleteService } from "@/lib/api";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function ServicesManager() {
   const [services, setServices] = useState([]);
@@ -9,6 +10,7 @@ export default function ServicesManager() {
   const [showAdd, setShowAdd] = useState(false);
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => { loadServices(); }, []);
 
@@ -27,13 +29,15 @@ export default function ServicesManager() {
     } catch { setMsg({ type: "error", text: "Erreur mise à jour rang" }); }
   }
 
-  async function handleDelete(id, title) {
-    if (!confirm(`Supprimer le service "${title}" ?`)) return;
+  async function confirmDelete() {
+    if (!deleteTarget) return;
     try {
-      await deleteService(id);
-      setServices((prev) => prev.filter((s) => s.id !== id));
+      await deleteService(deleteTarget.id);
+      setServices((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      await loadServices();
       setMsg({ type: "success", text: "Service supprimé" });
     } catch { setMsg({ type: "error", text: "Erreur suppression" }); }
+    setDeleteTarget(null);
   }
 
   if (loading) return <p>Chargement...</p>;
@@ -41,6 +45,14 @@ export default function ServicesManager() {
   return (
     <div>
       {msg && <div className={`msg msg--${msg.type}`}>{msg.text}</div>}
+
+      {deleteTarget && (
+        <ConfirmModal
+          message={`Supprimer le service "${deleteTarget.title}" ?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       <div className="todo-list">
         {services.map((s) => (
@@ -62,7 +74,7 @@ export default function ServicesManager() {
               >
                 Modifier
               </button>
-              <button className="btn btn--danger btn--sm" onClick={() => handleDelete(s.id, s.title)}>
+              <button className="btn btn--danger btn--sm" onClick={() => setDeleteTarget(s)}>
                 Supprimer
               </button>
             </div>
@@ -70,7 +82,7 @@ export default function ServicesManager() {
             {editId === s.id && (
               <EditServiceForm
                 service={s}
-                onSaved={() => { setEditId(null); loadServices(); setMsg({ type: "success", text: "Service modifié" }); }}
+                onSaved={() => { setEditId(null); loadServices(); }}
                 onCancel={() => setEditId(null)}
               />
             )}
@@ -85,7 +97,7 @@ export default function ServicesManager() {
       ) : (
         <AddServiceForm
           nextOrder={services.length + 1}
-          onSaved={() => { setShowAdd(false); loadServices(); setMsg({ type: "success", text: "Service ajouté" }); }}
+          onSaved={() => { setShowAdd(false); loadServices(); }}
           onCancel={() => setShowAdd(false)}
         />
       )}
@@ -97,15 +109,20 @@ function EditServiceForm({ service, onSaved, onCancel }) {
   const [title, setTitle] = useState(service.title);
   const [description, setDescription] = useState(service.description);
   const [saving, setSaving] = useState(false);
+  const [inlineMsg, setInlineMsg] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!title || !description) return;
     setSaving(true);
+    setInlineMsg(null);
     try {
       await updateService(service.id, { title, description });
-      onSaved();
-    } catch { alert("Erreur"); }
+      setInlineMsg({ type: "success", text: "Enregistré !" });
+      setTimeout(() => onSaved(), 800);
+    } catch {
+      setInlineMsg({ type: "error", text: "Erreur" });
+    }
     setSaving(false);
   }
 
@@ -125,6 +142,7 @@ function EditServiceForm({ service, onSaved, onCancel }) {
           {saving ? "..." : "Enregistrer"}
         </button>
         <button type="button" className="btn btn--secondary btn--sm" onClick={onCancel}>Annuler</button>
+        {inlineMsg && <span className={`inline-msg inline-msg--${inlineMsg.type}`}>{inlineMsg.text}</span>}
       </div>
     </form>
   );
@@ -135,15 +153,20 @@ function AddServiceForm({ nextOrder, onSaved, onCancel }) {
   const [description, setDescription] = useState("");
   const [sortOrder, setSortOrder] = useState(nextOrder);
   const [saving, setSaving] = useState(false);
+  const [inlineMsg, setInlineMsg] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!title || !description) return;
     setSaving(true);
+    setInlineMsg(null);
     try {
       await createService({ title, description, sort_order: sortOrder });
-      onSaved();
-    } catch { alert("Erreur"); }
+      setInlineMsg({ type: "success", text: "Ajouté !" });
+      setTimeout(() => onSaved(), 800);
+    } catch {
+      setInlineMsg({ type: "error", text: "Erreur" });
+    }
     setSaving(false);
   }
 
@@ -167,6 +190,7 @@ function AddServiceForm({ nextOrder, onSaved, onCancel }) {
           {saving ? "..." : "Ajouter"}
         </button>
         <button type="button" className="btn btn--secondary btn--sm" onClick={onCancel}>Annuler</button>
+        {inlineMsg && <span className={`inline-msg inline-msg--${inlineMsg.type}`}>{inlineMsg.text}</span>}
       </div>
     </form>
   );

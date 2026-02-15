@@ -53,7 +53,9 @@ export default function CreationDetail({ creation }) {
           {/* Main image full display */}
           <div className="creation-detail__main-image">
             {mainImage ? (
-              <img src={mainImage} alt={creation.title} />
+              <a href={mainImage} target="_blank" rel="noopener noreferrer">
+                <img src={mainImage} alt={creation.title} />
+              </a>
             ) : (
               <div
                 className="creation-detail__main-image-placeholder"
@@ -76,7 +78,9 @@ export default function CreationDetail({ creation }) {
                   return (
                     <div key={img.id || i} className="creation-detail__gallery-item">
                       {url ? (
-                        <img src={url} alt={`${creation.title} - photo ${i + 1}`} />
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt={`${creation.title} - photo ${i + 1}`} />
+                        </a>
                       ) : (
                         <div
                           className="creation-detail__gallery-placeholder"

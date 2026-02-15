@@ -77,7 +77,6 @@ export default function SettingsForm() {
 
   return (
     <div>
-      {msg && <div className={`msg msg--${msg.type}`}>{msg.text}</div>}
 
       <div className="form-group">
         <label>Nom du site</label>
@@ -150,10 +149,11 @@ export default function SettingsForm() {
         </div>
       ))}
 
-      <div style={{ marginTop: "1.5rem" }}>
+      <div style={{ marginTop: "1.5rem", display: "flex", alignItems: "center" }}>
         <button className="btn btn--primary" onClick={handleSave}>
           Enregistrer les paramètres
         </button>
+        {msg && <span className={`inline-msg inline-msg--${msg.type}`}>{msg.text}</span>}
       </div>
     </div>
   );
