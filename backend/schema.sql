@@ -45,6 +45,15 @@ CREATE TABLE IF NOT EXISTS social_links (
   sort_order INT DEFAULT 0
 );
 
+-- Auth codes for admin panel
+CREATE TABLE IF NOT EXISTS auth_codes (
+  id SERIAL PRIMARY KEY,
+  code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  used BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Contact / quote requests
 CREATE TABLE IF NOT EXISTS contact_requests (
   id SERIAL PRIMARY KEY,
